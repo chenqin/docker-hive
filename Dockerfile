@@ -1,14 +1,18 @@
-FROM azul/zulu-openjdk-debian:17
+FROM rtfpessoa/ubuntu-jdk8:latest
 
 WORKDIR /opt
 
 ENV HADOOP_HOME=/opt/hadoop
-ENV HADOOP_VERSION=3.3.4
+ENV HADOOP_VERSION=2.10.2
 ENV HIVE_HOME=/opt/hive
-ENV HIVE_VERSION=3.1.3
+ENV DERBY_HOME=/opt/derby
+ENV HIVE_VERSION=2.3.9
 ENV LOG4J_VERSION=2.19.0
 ENV LOG4J_LOCATION="https://repo1.maven.org/maven2/org/apache/logging/log4j"
+ENV DERBY_OPTS="-Dderby.system.home=$DERBY_HOME/data"
 
+RUN mkdir ${DERBY_HOME}
+RUN mkdir ${DERBY_HOME}/data
 RUN mkdir ${HIVE_HOME}
 RUN mkdir ${HADOOP_HOME}
 RUN apt-get clean && \
@@ -17,14 +21,12 @@ RUN apt-get clean && \
     apt-get -qqy install curl && \
     curl -L https://dlcdn.apache.org/hive/hive-${HIVE_VERSION}/apache-hive-${HIVE_VERSION}-bin.tar.gz | tar zxf - && \
     curl -L https://dlcdn.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz | tar zxf - && \
+    curl -L https://archive.apache.org/dist/db/derby/db-derby-10.14.2.0/db-derby-10.14.2.0-bin.tar.gz | tar zxf - && \
     mv apache-hive-${HIVE_VERSION}-bin/* ${HIVE_HOME} && \
     mv hadoop-${HADOOP_VERSION}/* ${HADOOP_HOME} && \
+    mv db-derby-10.14.2.0-bin/* ${DERBY_HOME} && \
     apt-get install --only-upgrade openssl libssl1.1 libexpat1 && \
     apt-get install -y libk5crypto3 libkrb5-3 libsqlite3-0
-
-RUN rm ${HIVE_HOME}/lib/postgresql-9.4.1208.jre7.jar
-
-RUN curl -o ${HIVE_HOME}/lib/postgresql-42.2.25.jre7.jar -L https://jdbc.postgresql.org/download/postgresql-42.2.25.jre7.jar
 
 # Configure Hadoop AWS Jars to be available to hive
 RUN ln -s ${HADOOP_HOME}/share/hadoop/tools/lib/*aws* ${HIVE_HOME}/lib
@@ -46,17 +48,17 @@ RUN \
 
 # https://docs.oracle.com/javase/7/docs/technotes/guides/net/properties.html
 # Java caches dns results forever, don't cache dns results forever:
-RUN touch ${JAVA_HOME}/lib/security/java.security
-RUN sed -i '/networkaddress.cache.ttl/d' ${JAVA_HOME}/lib/security/java.security
-RUN sed -i '/networkaddress.cache.negative.ttl/d' ${JAVA_HOME}/lib/security/java.security
-RUN echo 'networkaddress.cache.ttl=0' >> ${JAVA_HOME}/lib/security/java.security
-RUN echo 'networkaddress.cache.negative.ttl=0' >> ${JAVA_HOME}/lib/security/java.security
+RUN touch ${JAVA_HOME}/jre/lib/security/java.security
+RUN sed -i '/networkaddress.cache.ttl/d' ${JAVA_HOME}/jre/lib/security/java.security
+RUN sed -i '/networkaddress.cache.negative.ttl/d' ${JAVA_HOME}/jre/lib/security/java.security
+RUN echo 'networkaddress.cache.ttl=0' >> ${JAVA_HOME}/jre/lib/security/java.security
+RUN echo 'networkaddress.cache.negative.ttl=0' >> ${JAVA_HOME}/jre/lib/security/java.security
 
 # imagebuilder expects the directory to be created before VOLUME
 RUN mkdir -p /var/lib/hive /.beeline ${HOME}/.beeline
 # to allow running as non-root
-RUN chown -R 1002:0 ${HIVE_HOME} ${HADOOP_HOME} /var/lib/hive /.beeline ${HOME}/.beeline /etc/passwd $(readlink -f ${JAVA_HOME}/lib/security/cacerts) && \
-    chmod -R u+rwx,g+rwx ${HIVE_HOME} ${HADOOP_HOME} /var/lib/hive /.beeline ${HOME}/.beeline /etc/passwd $(readlink -f ${JAVA_HOME}/lib/security/cacerts) && \
+RUN chown -R 1002:0 ${HIVE_HOME} ${HADOOP_HOME} /var/lib/hive /.beeline ${HOME}/.beeline /etc/passwd $(readlink -f ${JAVA_HOME}/jre/lib/security/cacerts) && \
+    chmod -R u+rwx,g+rwx ${HIVE_HOME} ${HADOOP_HOME} /var/lib/hive /.beeline ${HOME}/.beeline /etc/passwd $(readlink -f ${JAVA_HOME}/jre/lib/security/cacerts) && \
     chown 1002:0 ${HIVE_HOME}/entrypoint.sh && chmod +x ${HIVE_HOME}/entrypoint.sh
 
 USER 1002
